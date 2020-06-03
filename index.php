@@ -5,11 +5,15 @@ $files = array_filter(scandir('scripts'), function ($script) {
 
 $final = [];
 if ($files) {
+    $submitted = 0;
+    $passes = 0;
+    $fails = 0;
     foreach ($files as $file) {
+        $submitted++;
         $script = [];
         $script['file'] = $file;
         if (preg_match('/.php$/i', $file)) {
-            $output = exec('php scripts/' . $file);
+            $output = exec('php -f scripts/' . $file .' 2>&1');
         } elseif (preg_match('/.py$/i', $file)) {
             $output = exec('python scripts/' . $file);
         } elseif (preg_match('/.js$/i', $file)) {
@@ -17,27 +21,31 @@ if ($files) {
         }
 
         if (isset($output)) {
-            $script['output'] = $output;
             $result = [];
-            preg_match('/^Hello World, this is ([a-zA-Z -]*) with HNGi7 ID ((HNG-|)[0-9]{1,5}) using (Python|PHP|JavaScript|Node.js) for stage 2 task(.|)$/i', $output, $result);
+            preg_match('/^Hello World, this is ([a-zA-Z -]*) with HNGi7 ID ((HNG-|)[0-9]{1,5}) using (Python|PHP|JavaScript|Node.js) for stage 2 task.(([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9_\-\.]+)\.([a-zA-Z]{2,5}))$/i', $output, $result);
             if (count($result) > 0) {
                 $script['name'] = $result[1];
                 $script['id'] = $result[2];
                 $script['language'] = $result[4];
                 $script['status'] = 'Pass';
+                $script['email']= $result[5];
+                $script['output'] = substr($output,0,strpos($output,"."));
+                $passes++;
             } else {
                 $script['name'] = "";
                 $script['id'] = "";
                 $script['language'] = "";
                 $script['status'] = 'Fail';
+                $script['email']='';
+                $script['output'] = '';
+                $fails++;
             }
 
             array_push($final, $script);
-
         }
-
     }
 }
+
 if (!isset($_GET['json'])) {
     ?>
     <!DOCTYPE html>
@@ -70,7 +78,12 @@ if (!isset($_GET['json'])) {
     <!-- Page Content -->
     <main role="main" class="container">
         <div class="my-3 p-3 bg-white rounded shadow-sm">
-            <h6 class="border-bottom border-gray pb-2 mb-0">Scripts Results</h6>
+            <h6 class="border-bottom border-gray pb-2 mb-0">
+                Scripts Results
+                <span class="badge badge-primary">Submitted <?php echo $submitted ?></span>
+                <span class="badge badge-success">Passes <?php echo $passes ?></span>
+                <span class="badge badge-danger">Fails <?php echo $fails ?></span>
+            </h6>
             <table id="table" class="table table-striped table-bordered">
                 <thead>
                 <tr>
@@ -78,6 +91,7 @@ if (!isset($_GET['json'])) {
                     <th>Output</th>
                     <th>File Name</th>
                     <th>Name</th>
+                    <th>Email</th>
                     <th>Language</th>
                     <th>ID</th>
                 </tr>
@@ -89,6 +103,7 @@ if (!isset($_GET['json'])) {
                         <td><?=$script['output']?></td>
                         <td><?=$script['file']?></td>
                         <td><?=$script['name']?></td>
+                        <td><?=$script['email']?></td>
                         <td><?=$script['language']?></td>
                         <td><?=$script['id']?></td>
 
@@ -113,11 +128,7 @@ if (!isset($_GET['json'])) {
 
     </html>
     <?php
-
 } else {
-
-//return the json response :
     header('Content-Type: application/json');  // <-- header declaration
     echo json_encode($final, true);    // <--- encode
-    exit();
 }
